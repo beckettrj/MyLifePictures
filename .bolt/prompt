@@ -1,0 +1,52 @@
+PROMPT: Build Award-Winning Hackathon MVP for MyLifePictures.ai
+Context:
+You are tasked with generating a modular, secure, and enterprise-grade Bolt.New application (front-end) backed by Supabase and orchestrated by n8n, delivering an AI-powered slideshow/screensaver for elderly users. It must support image display modes, voice commands, and live LLM integration (OpenAI, Gemini, Grok, Anthropic) with robust key validation and error handling.
+________________________________________
+1. PROJECT METADATA
+•	Name: MyLifePictures.ai  a MyLifePictures.ai 
+AI-Powered Elder Care Slideshow MVP Production
+•	URL: https://MyLifePictures.ai
+•	Stack: Bolt.New (UI), Supabase (Auth + PostgreSQL + Storage), n8n (workflows), OpenAI/Gemini/Grok/Anthropic (LLMs), Web Speech API/Whisper (voice)
+________________________________________
+2. MODULE BREAKDOWN
+A. LLM Configuration Module
+•	UI page for entering API keys (OpenAI, Gemini, Grok, Anthropic)
+•	Live validation on key entry: display “Valid”/“Invalid” instantly
+•	Persist keys to .env via Supabase or local file
+•	Retry logic for expired/invalid keys with clear error messages
+B. Display Agent Module
+•	Image modes: Random, Sequential, Reverse, Sort-by-Date
+•	Multi-select folders UI (cloud/local)
+•	Transitions: Fade-in/out, Slide-in/out (CSS-based)
+•	Night mode: Darken images automatically after user-set hour
+•	Sleep mode: Timeout with custom “Bedtime” message
+C. Voice Agent Module
+•	Activation: Push-to-talk button or wake-word (“Hey Sunny”)
+•	Commands: Go back N, Pause, Next, Dim/Undim, Start/Stop slideshow, Skip image
+•	Annotation trigger: “Let me tell you about this picture”
+•	Coaxing mode (optional): prompt “Who is this?” “Where was this taken?”
+•	Profanity & Ethics Settings: profanity filter, suicide/end-of-life toggle, violence/alert logging
+D. AI Control Core
+•	Single-agent event router: receives voice/LLM responses and dispatches to Display Agent or Workflow
+•	Error handling: fallback routines if LLM fails or images cannot load
+E. n8n Workflow Module
+•	Webhook triggers for:
+o	Voice command → route to Control Core
+o	Annotation completed → write to Supabase
+o	Distress keywords detected → SMS/email to caregiver
+•	Data flows: image metadata → Supabase → Control Core
+________________________________________
+3. INFRASTRUCTURE & SCRIPTS
+📦 makefile.md
+•	Targets: install, dev-run, build, test, reset-db
+•	Descriptions for each step
+🛠️ install.bat / install.sh
+•	Bolt.New CLI install
+•	npm install / pip install dependencies
+•	Supabase CLI init & migrate
+•	Copy .env.example → .env check
+
+
+By default, this template supports JSX syntax with Tailwind CSS classes, React hooks, and Lucide React for icons. Do not install other packages for UI themes, icons, etc unless absolutely necessary or I request them.
+
+Use icons from lucide-react for logos.
