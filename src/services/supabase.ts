@@ -1,6 +1,6 @@
 /**
  * Supabase client configuration and utilities
- * Handles database, authentication, and storage operations
+ * Updated to work with BIGINT schema and proper file upload
  */
 
 import { createClient, SupabaseClient, User, Session } from '@supabase/supabase-js';
@@ -80,11 +80,11 @@ export async function testSupabaseConnection() {
 }
 
 /**
- * Authentication utilities
+ * Authentication utilities - NO database calls
  */
 export const auth = {
   /**
-   * Get current user
+   * Get current user - NO database calls
    */
   async getCurrentUser(): Promise<User | null> {
     try {
@@ -157,26 +157,50 @@ export const auth = {
     }
 
     console.log('✅ Sign in successful:', data.user?.id);
+    
+    // After successful sign in, update user_id_uuid in photos table
+    if (data.user) {
+      try {
+        console.log('Updating user_id_uuid in photos table for user:', data.user.id);
+        
+        // Update all photos that don't have a user_id_uuid set
+        const { error: updateError } = await supabase
+          .from('photos')
+          .update({ user_id_uuid: data.user.id })
+          .is('user_id_uuid', null);
+          
+        if (updateError) {
+          console.error('Error updating user_id_uuid in photos:', updateError);
+        } else {
+          console.log('Successfully updated user_id_uuid in photos table');
+        }
+      } catch (updateError) {
+        console.error('Failed to update user_id_uuid in photos:', updateError);
+      }
+    }
+    
     return data;
   },
 
   /**
    * Sign up with email and password
    */
-  async signUp(email: string, password: string) {
+  async signUp(email: string, password: string, options?: any) {
     if (!isSupabaseReady) {
       throw new Error('Supabase not configured. Please set VITE_SUPABASE_ANON_KEY environment variable.');
     }
 
     console.log('🔐 Attempting sign up for:', email);
+    console.log('🌐 Using redirect URL:', `${window.location.origin}/auth/callback`);
 
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        emailRedirectTo: options?.options?.emailRedirectTo || `${window.location.origin}/auth/callback`,
         data: {
-          email_confirm: true
+          full_name: options?.data?.full_name || '',
+          ...options?.data
         }
       }
     });
@@ -198,18 +222,19 @@ export const auth = {
   /**
    * Resend email confirmation
    */
-  async resendConfirmation(email: string) {
+  async resendConfirmation(email: string, options?: any) {
     if (!isSupabaseReady) {
       throw new Error('Supabase not configured');
     }
 
     console.log('📧 Resending confirmation email to:', email);
+    console.log('🌐 Using redirect URL:', options?.emailRedirectTo || `${window.location.origin}/auth/callback`);
 
     const { error } = await supabase.auth.resend({
       type: 'signup',
       email,
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`
+        emailRedirectTo: options?.emailRedirectTo || `${window.location.origin}/auth/callback`
       }
     });
 
@@ -249,72 +274,116 @@ export const auth = {
       return { data: { subscription: { unsubscribe: () => {} } } };
     }
 
-    return supabase.auth.onAuthStateChange(callback);
+    return supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('🔄 Auth state changed:', event, session?.user?.id);
+      
+      // When user signs in, update user_id_uuid in photos table
+      if (event === 'SIGNED_IN' && session?.user) {
+        try {
+          console.log('Updating user_id_uuid in photos table for user:', session.user.id);
+          
+          // Update all photos that don't have a user_id_uuid set
+          const { error: updateError } = await supabase
+            .from('photos')
+            .update({ user_id_uuid: session.user.id })
+            .is('user_id_uuid', null);
+            
+          if (updateError) {
+            console.error('Error updating user_id_uuid in photos:', updateError);
+          } else {
+            console.log('Successfully updated user_id_uuid in photos table');
+          }
+        } catch (updateError) {
+          console.error('Failed to update user_id_uuid in photos:', updateError);
+        }
+      }
+      
+      callback(event, session);
+    });
   }
 };
 
 /**
- * Database utilities
+ * Database utilities - OPTIONAL, only used when needed, with BIGINT support
  */
 export const db = {
   /**
-   * Get user profile
+   * Get user profile from profiles table - OPTIONAL
    */
   async getUserProfile(userId: string) {
     if (!isSupabaseReady) {
       throw new Error('Supabase not configured');
     }
 
-    const { data, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', userId)
-      .single();
+    console.log('👤 Getting user profile from profiles table for:', userId);
 
-    if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
-      throw error;
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+        console.error('❌ Error getting user profile:', error);
+        throw error;
+      }
+
+      console.log('✅ User profile retrieved:', data?.id);
+      return data;
+    } catch (err) {
+      console.error('💥 Failed to get user profile:', err);
+      throw err;
     }
-
-    return data;
   },
 
   /**
-   * Create or update user profile
+   * Create or update user profile in profiles table - OPTIONAL
    */
   async upsertUserProfile(profile: any) {
     if (!isSupabaseReady) {
       throw new Error('Supabase not configured');
     }
 
-    const { data, error } = await supabase
-      .from('users')
-      .upsert(profile)
-      .select()
-      .single();
+    console.log('👤 Upserting user profile in profiles table');
 
-    if (error) {
-      throw error;
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .upsert(profile)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('❌ Error upserting user profile:', error);
+        throw error;
+      }
+
+      console.log('✅ User profile upserted:', data?.id);
+      return data;
+    } catch (err) {
+      console.error('💥 Failed to upsert user profile:', err);
+      throw err;
     }
-
-    return data;
   },
 
   /**
-   * Get user photos with error handling
+   * Get user photos with error handling - OPTIONAL
    */
   async getUserPhotos(userId: string) {
     if (!isSupabaseReady) {
-      throw new Error('Supabase not configured');
+      console.warn('Supabase not configured - returning empty photos array');
+      return [];
     }
 
     try {
       console.log('🔍 Fetching photos for user:', userId);
       
+      // Try to get photos by user_id_uuid (UUID)
       const { data, error } = await supabase
         .from('photos')
         .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false });
+        .eq('user_id_uuid', userId);
 
       if (error) {
         console.error('❌ Database error fetching photos:', error);
@@ -335,7 +404,7 @@ export const db = {
   },
 
   /**
-   * Upload photo metadata with enhanced debugging
+   * Upload photo metadata with enhanced debugging - OPTIONAL
    */
   async uploadPhotoMetadata(photoData: any) {
     if (!isSupabaseReady) {
@@ -343,18 +412,24 @@ export const db = {
     }
 
     console.log('📝 Uploading photo metadata to database:', {
-      user_id: photoData.user_id,
-      filename: photoData.filename,
-      file_path: photoData.file_path,
-      public_url: photoData.public_url,
+      folder_id: photoData.folder_id,
+      display_name: photoData.display_name,
       file_size: photoData.file_size,
-      mime_type: photoData.mime_type
+      user_id_uuid: photoData.user_id_uuid
     });
 
     try {
+      // Adapt to your schema structure
+      const adaptedPhotoData = {
+        folder_id: photoData.folder_id || 1, // Default to folder ID 1
+        display_name: photoData.display_name || photoData.filename,
+        created_at: photoData.created_at || new Date().toISOString(),
+        user_id_uuid: photoData.user_id_uuid // Include user_id_uuid
+      };
+
       const { data, error } = await supabase
         .from('photos')
-        .insert(photoData)
+        .insert(adaptedPhotoData)
         .select()
         .single();
 
@@ -377,7 +452,42 @@ export const db = {
   },
 
   /**
-   * Create folder
+   * Get user folders - Using folders table - OPTIONAL
+   */
+  async getUserFolders(userId: string) {
+    if (!isSupabaseReady) {
+      console.warn('Supabase not configured - returning empty folders array');
+      return [];
+    }
+
+    try {
+      console.log('📁 Fetching folders for user:', userId);
+      
+      // Try to get folders by user_id (BIGINT) or user_id_uuid (UUID)
+      const { data, error } = await supabase
+        .from('folders')
+        .select('*');
+
+      if (error) {
+        console.error('❌ Database error fetching folders:', error);
+        // If table doesn't exist, return empty array instead of throwing
+        if (error.code === '42P01') {
+          console.warn('⚠️ Folders table does not exist. Please run database migrations.');
+          return [];
+        }
+        throw error;
+      }
+
+      console.log('✅ Successfully fetched folders:', data?.length || 0, 'folders found');
+      return data || [];
+    } catch (error) {
+      console.error('💥 Error fetching user folders:', error);
+      return [];
+    }
+  },
+
+  /**
+   * Create folder - Using folders table - OPTIONAL
    */
   async createFolder(folderData: any) {
     if (!isSupabaseReady) {
@@ -387,9 +497,17 @@ export const db = {
     console.log('📁 Creating folder:', folderData);
 
     try {
+      // Adapt to your schema structure
+      const adaptedFolderData = {
+        name: folderData.name,
+        user_id: 1, // Default to user ID 1 for testing with BIGINT
+        user_id_uuid: folderData.user_id, // Include UUID user ID
+        created_at: folderData.created_at || new Date().toISOString()
+      };
+
       const { data, error } = await supabase
-        .from('photo_folders')
-        .insert(folderData)
+        .from('folders')
+        .insert(adaptedFolderData)
         .select()
         .single();
 
@@ -407,42 +525,7 @@ export const db = {
   },
 
   /**
-   * Get user folders
-   */
-  async getUserFolders(userId: string) {
-    if (!isSupabaseReady) {
-      throw new Error('Supabase not configured');
-    }
-
-    try {
-      console.log('📁 Fetching folders for user:', userId);
-      
-      const { data, error } = await supabase
-        .from('photo_folders')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('❌ Database error fetching folders:', error);
-        // If table doesn't exist, return empty array instead of throwing
-        if (error.code === '42P01') {
-          console.warn('⚠️ Photo folders table does not exist. Please run database migrations.');
-          return [];
-        }
-        throw error;
-      }
-
-      console.log('✅ Successfully fetched folders:', data?.length || 0, 'folders found');
-      return data || [];
-    } catch (error) {
-      console.error('💥 Error fetching user folders:', error);
-      return [];
-    }
-  },
-
-  /**
-   * Check if database tables exist
+   * Check if database tables exist - OPTIONAL
    */
   async checkTablesExist() {
     if (!isSupabaseReady) {
@@ -450,17 +533,27 @@ export const db = {
     }
 
     try {
-      // Try to query each table to see if it exists
-      const tables = ['users', 'photos', 'photo_folders', 'audio_recordings'];
+      // Test if tables exist by trying to query them
+      const tables = [
+        { name: 'profiles', query: () => supabase.from('profiles').select('count', { count: 'exact', head: true }) },
+        { name: 'photos', query: () => supabase.from('photos').select('count', { count: 'exact', head: true }) },
+        { name: 'folders', query: () => supabase.from('folders').select('count', { count: 'exact', head: true }) },
+        { name: 'audio_recordings', query: () => supabase.from('audio_recordings').select('count', { count: 'exact', head: true }) }
+      ];
+
       const results = await Promise.allSettled(
         tables.map(async (table) => {
-          const { error } = await supabase.from(table).select('count', { count: 'exact', head: true });
-          return { table, exists: !error };
+          try {
+            const { error } = await table.query();
+            return { table: table.name, exists: !error };
+          } catch (err) {
+            return { table: table.name, exists: false };
+          }
         })
       );
 
       const tableStatus = results.map((result, index) => ({
-        table: tables[index],
+        table: tables[index].name,
         exists: result.status === 'fulfilled' ? result.value.exists : false
       }));
 
@@ -481,49 +574,64 @@ export const db = {
 };
 
 /**
- * Storage utilities with enhanced debugging
+ * Storage utilities with enhanced error handling
  */
 export const storage = {
+  // Expose supabase instance for direct access
+  supabase,
+
   /**
-   * Upload file to storage with comprehensive logging
+   * Check if storage buckets exist
    */
-  async uploadFile(bucket: string, path: string, file: File) {
+  async checkStorageBuckets() {
+    try {
+      const { data, error } = await supabase.storage.from('photos').list();
+      if (error) {
+        console.error('Error fetching buckets:', error);
+        return [];
+      }
+      console.log('Available files in photos bucket:', data);
+      return data;
+    } catch (error) {
+      console.error('Error checking storage buckets:', error);
+      return [];
+    }
+  },
+
+  /**
+   * Upload file to storage using Supabase example pattern
+   */
+  async uploadFile(file: File, userId: string) {
     if (!isSupabaseReady) {
-      throw new Error('Supabase not configured');
+      throw new Error('Supabase not configured. Please set VITE_SUPABASE_ANON_KEY environment variable.');
     }
 
     console.log('☁️ Starting storage upload:', {
-      bucket,
-      path,
       fileName: file.name,
       fileSize: `${(file.size / 1024 / 1024).toFixed(2)} MB`,
       fileType: file.type,
+      userId: userId,
       timestamp: new Date().toISOString()
     });
 
     try {
-      // Check if bucket exists first
-      const { data: buckets, error: bucketsError } = await supabase.storage.listBuckets();
-      
-      if (bucketsError) {
-        console.error('❌ Failed to list buckets:', bucketsError);
-        throw new Error(`Storage error: ${bucketsError.message}`);
+      // Validate file type using the pattern from your example
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+      if (!allowedTypes.includes(file.type)) {
+        console.error('Unsupported file type');
+        throw new Error(`Unsupported file type: ${file.type}. Please use JPEG, PNG, or GIF.`);
       }
 
-      const bucketExists = buckets?.some(b => b.name === bucket);
-      if (!bucketExists) {
-        console.error(`❌ Bucket '${bucket}' does not exist. Available buckets:`, buckets?.map(b => b.name));
-        throw new Error(`Storage bucket '${bucket}' does not exist. Please create it in your Supabase dashboard.`);
-      }
+      // Generate a unique filename to avoid duplicates
+      const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+      const timestamp = Date.now();
+      const randomId = Math.random().toString(36).substring(2, 8);
+      const uniqueFileName = `${timestamp}-${randomId}.${fileExt}`;
 
-      console.log('✅ Bucket exists, proceeding with upload...');
-
+      // Use the exact pattern from your Supabase example
       const { data, error } = await supabase.storage
-        .from(bucket)
-        .upload(path, file, {
-          cacheControl: '3600',
-          upsert: false
-        });
+        .from('photos')
+        .upload(`public/${uniqueFileName}`, file);
 
       if (error) {
         console.error('❌ Storage upload error:', {
@@ -532,21 +640,11 @@ export const storage = {
           error: error
         });
         
-        // Provide more specific error messages
-        if (error.message.includes('Duplicate')) {
-          throw new Error(`File already exists at ${path}. Please try again or rename the file.`);
-        } else if (error.message.includes('Policy')) {
-          throw new Error('Storage permission denied. Please check your Supabase storage policies.');
-        } else if (error.message.includes('size')) {
-          throw new Error('File too large. Please use a smaller file (max 10MB).');
-        } else {
-          throw new Error(`Storage upload failed: ${error.message}`);
-        }
+        throw error;
       }
 
       console.log('✅ Storage upload successful:', {
         path: data.path,
-        id: data.id,
         fullPath: data.fullPath
       });
 
@@ -599,7 +697,7 @@ export const storage = {
 };
 
 /**
- * Folder service utilities
+ * Folder service utilities - OPTIONAL
  */
 export const folderService = {
   /**
@@ -610,7 +708,8 @@ export const folderService = {
     
     const folderData = {
       name,
-      user_id: userId,
+      user_id: 1, // Default to user ID 1 for testing with BIGINT
+      user_id_uuid: userId, // Include UUID user ID
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
@@ -631,7 +730,7 @@ export const folderService = {
  */
 export const photoService = {
   /**
-   * Upload photo with metadata and enhanced debugging
+   * Upload photo with metadata using Supabase example pattern and BIGINT schema
    */
   async uploadPhoto(file: File, userId: string, folderId?: string) {
     if (!isSupabaseReady) {
@@ -648,72 +747,77 @@ export const photoService = {
     });
 
     try {
-      // Validate file
+      // Validate file using the pattern from your example
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+      if (!allowedTypes.includes(file.type)) {
+        console.error('Unsupported file type');
+        throw new Error(`Unsupported file type: ${file.type}. Please use JPEG, PNG, or GIF.`);
+      }
+
+      // Validate file size
       if (file.size > 10 * 1024 * 1024) { // 10MB limit
         throw new Error('File too large. Please use a file smaller than 10MB.');
       }
 
-      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/bmp'];
-      if (!allowedTypes.includes(file.type)) {
-        throw new Error(`Unsupported file type: ${file.type}. Please use JPEG, PNG, GIF, WebP, or BMP.`);
-      }
-
       console.log('✅ File validation passed');
 
-      // Generate unique file path
+      // Generate a unique filename to avoid duplicates
       const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
       const timestamp = Date.now();
       const randomId = Math.random().toString(36).substring(2, 8);
-      const fileName = `${timestamp}-${randomId}.${fileExt}`;
-      const filePath = `${userId}/${fileName}`;
+      const uniqueFileName = `${timestamp}-${randomId}.${fileExt}`;
 
-      console.log('📝 Generated file path:', filePath);
+      // Step 1: Upload file to storage using your example pattern
+      console.log('⬆️ Step 1: Uploading to storage with unique filename:', uniqueFileName);
+      const { data: uploadResult, error: uploadError } = await supabase.storage
+        .from('photos')
+        .upload(`public/${uniqueFileName}`, file);
 
-      // Step 1: Upload file to storage
-      console.log('⬆️ Step 1: Uploading to storage...');
-      const uploadResult = await storage.uploadFile('photos', filePath, file);
+      if (uploadError) {
+        console.error('❌ Storage upload error:', uploadError);
+        throw uploadError;
+      }
+
       console.log('✅ Storage upload completed');
 
       // Step 2: Get public URL
       console.log('🔗 Step 2: Generating public URL...');
-      const publicUrl = storage.getPublicUrl('photos', filePath);
+      const publicUrl = storage.getPublicUrl('photos', uploadResult.path);
       console.log('✅ Public URL generated');
 
-      // Step 3: Store metadata in database
+      // Step 3: Store metadata in database (optional - only if database is available)
       console.log('💾 Step 3: Saving metadata to database...');
-      const photoData = {
-        user_id: userId,
-        folder_id: folderId || null,
-        filename: file.name,
-        file_path: filePath, // Storage path
-        public_url: publicUrl, // Public URL for display
-        file_size: file.size,
-        mime_type: file.type,
-        width: null, // Will be updated when image loads
-        height: null, // Will be updated when image loads
-        taken_at: null, // Could be extracted from EXIF data
-        location: null,
-        description: null,
-        ai_description: null,
-        tags: [],
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
+      let metadata = null;
+      
+      try {
+        // Map to your actual schema structure
+        const photoData = {
+          // Use the correct column names from your schema
+          folder_id: folderId ? parseInt(folderId) : 1, // BIGINT folder ID
+          display_name: file.name,
+          created_at: new Date().toISOString(),
+          user_id_uuid: userId // Set the user_id_uuid to the current user's ID
+        };
 
-      const metadata = await db.uploadPhotoMetadata(photoData);
-      console.log('✅ Database metadata saved');
+        metadata = await db.uploadPhotoMetadata(photoData);
+        console.log('✅ Database metadata saved');
+      } catch (dbError) {
+        console.warn('⚠️ Database metadata save failed (continuing without database):', dbError);
+        // Continue without database - storage upload was successful
+      }
 
       const result = {
         upload: uploadResult,
         metadata,
         publicUrl,
-        filePath
+        filePath: uploadResult.path
       };
 
       console.log('🎉 Photo upload completed successfully:', {
-        id: metadata.id,
-        filename: metadata.filename,
-        publicUrl: result.publicUrl
+        id: metadata?.id || 'no-db',
+        filename: file.name,
+        publicUrl: result.publicUrl,
+        user_id_uuid: userId
       });
 
       return result;

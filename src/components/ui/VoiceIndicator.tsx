@@ -1,5 +1,5 @@
 /**
- * Voice recognition status indicator
+ * Voice recognition status indicator with improved positioning
  * Shows listening state, command feedback, and processing status
  */
 
@@ -23,7 +23,7 @@ export function VoiceIndicator({
   className = '',
 }: VoiceIndicatorProps) {
   return (
-    <div className={`fixed top-6 right-6 z-50 ${className}`}>
+    <div className={`fixed bottom-6 right-6 z-40 ${className}`}>
       <div className="flex flex-col items-end gap-3">
         {/* Voice Command Feedback */}
         <AnimatePresence>
@@ -45,7 +45,7 @@ export function VoiceIndicator({
           )}
         </AnimatePresence>
 
-        {/* Main Voice Button */}
+        {/* Main Voice Button - Positioned to not overlap with header */}
         <motion.button
           onClick={onToggleListening}
           className={`
@@ -53,7 +53,7 @@ export function VoiceIndicator({
             transition-all duration-300 focus:ring-4 focus:ring-offset-2 focus:outline-none
             ${isListening 
               ? 'bg-red-500 hover:bg-red-600 focus:ring-red-200' 
-              : 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-200'
+              : 'bg-gray-500 hover:bg-gray-600 focus:ring-gray-200'
             }
           `}
           whileHover={{ scale: 1.05 }}
@@ -133,5 +133,5 @@ function formatCommand(command: string): string {
 function getStatusText(isListening: boolean, isProcessing: boolean): string {
   if (isProcessing) return 'Processing...';
   if (isListening) return 'Listening...';
-  return 'Click to talk';
+  return 'Microphone OFF';
 }

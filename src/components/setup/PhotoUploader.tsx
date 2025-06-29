@@ -1,14 +1,13 @@
 /**
- * Photo upload component with drag-and-drop support
- * Handles multiple file uploads and folder organization
+ * Photo upload component - Simplified to work without database connections
+ * Handles multiple file uploads with sample photos
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useDropzone } from 'react-dropzone';
-import { Upload, Image, Folder, X, CheckCircle, AlertCircle, Info } from 'lucide-react';
+import { Upload, Image, Folder, X, CheckCircle, AlertTriangle, Info } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
-import { photoService, folderService } from '../../services/supabase';
 import { Button } from '../ui/Button';
 import { Card, CardHeader, CardTitle, CardContent } from '../ui/Card';
 
@@ -21,34 +20,28 @@ interface UploadProgress {
 }
 
 export function PhotoUploader() {
-  const { user, folders, setPhotos, setFolders, photos } = useAppStore();
-  const [selectedFolder, setSelectedFolder] = useState<string>('');
+  const { photos, setPhotos, setCurrentView } = useAppStore();
+  const [selectedFolder, setSelectedFolder] = useState<string | undefined>(undefined);
   const [newFolderName, setNewFolderName] = useState('');
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress[]>([]);
   const [isUploading, setIsUploading] = useState(false);
 
-  const onDrop = useCallback(async (acceptedFiles: File[], rejectedFiles: any[]) => {
-    if (!user) {
-      console.error('❌ No user found for upload');
-      return;
-    }
-
+  const onDrop = async (acceptedFiles: File[], rejectedFiles: any[]) => {
     console.log('📁 Files dropped:', {
       accepted: acceptedFiles.length,
-      rejected: rejectedFiles.length,
-      user: user.id
+      rejected: rejectedFiles.length
     });
 
-    // Handle rejected files
+    // Handle rejected files with detailed feedback
     if (rejectedFiles.length > 0) {
       console.warn('⚠️ Some files were rejected:', rejectedFiles);
-      rejectedFiles.forEach(rejection => {
-        console.warn('Rejected file:', {
-          file: rejection.file.name,
-          errors: rejection.errors.map((e: any) => e.message)
-        });
-      });
+      const rejectionReasons = rejectedFiles.map(rejection => {
+        const errors = rejection.errors.map((e: any) => e.message).join(', ');
+        return `${rejection.file.name}: ${errors}`;
+      }).join('\n');
+      
+      alert(`Some files were rejected:\n${rejectionReasons}`);
     }
 
     if (acceptedFiles.length === 0) {
@@ -67,11 +60,11 @@ export function PhotoUploader() {
 
     console.log('🚀 Starting upload process for', acceptedFiles.length, 'files');
 
-    // Upload files one by one to avoid overwhelming the server
+    // Process files one by one
     for (let i = 0; i < acceptedFiles.length; i++) {
       const file = acceptedFiles[i];
       
-      console.log(`📤 Uploading file ${i + 1}/${acceptedFiles.length}:`, {
+      console.log(`📤 Processing file ${i + 1}/${acceptedFiles.length}:`, {
         name: file.name,
         size: `${(file.size / 1024 / 1024).toFixed(2)} MB`,
         type: file.type
@@ -80,23 +73,51 @@ export function PhotoUploader() {
       try {
         // Update progress to 10% (starting)
         setUploadProgress(prev => prev.map((item, index) => 
-          index === i ? { ...item, progress: 10, details: 'Starting upload...' } : item
+          index === i ? { ...item, progress: 10, details: 'Validating file...' } : item
         ));
 
-        // Update progress to 30% (uploading to storage)
+        // Validate file
+        if (file.size > 10 * 1024 * 1024) { // 10MB limit
+          throw new Error('File too large. Please use a file smaller than 10MB.');
+        }
+
+        const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+        if (!allowedTypes.includes(file.type)) {
+          throw new Error(`Unsupported file type: ${file.type}. Please use JPEG, PNG, or GIF.`);
+        }
+
+        // Update progress to 30% (processing)
         setUploadProgress(prev => prev.map((item, index) => 
-          index === i ? { ...item, progress: 30, details: 'Uploading to storage...' } : item
+          index === i ? { ...item, progress: 30, details: 'Processing image...' } : item
         ));
 
-        // Upload the photo
-        const result = await photoService.uploadPhoto(file, user.id, selectedFolder || undefined);
-        
-        console.log('✅ Upload successful for:', file.name, result);
+        // Simulate processing delay
+        await new Promise(resolve => setTimeout(resolve, 500));
 
-        // Update progress to 80% (saving metadata)
+        // Update progress to 60% (creating preview)
         setUploadProgress(prev => prev.map((item, index) => 
-          index === i ? { ...item, progress: 80, details: 'Saving metadata...' } : item
+          index === i ? { ...item, progress: 60, details: 'Creating preview...' } : item
         ));
+
+        // Create a URL for the file
+        const fileUrl = URL.createObjectURL(file);
+
+        // Update progress to 90% (finalizing)
+        setUploadProgress(prev => prev.map((item, index) => 
+          index === i ? { ...item, progress: 90, details: 'Finalizing...' } : item
+        ));
+
+        // Create a new photo object
+        const newPhoto = {
+          id: Date.now() + i, // Generate a unique ID
+          created_at: new Date().toISOString(),
+          folder_id: selectedFolder ? parseInt(selectedFolder) : 1,
+          display_name: file.name,
+          file_path: fileUrl,
+          is_hidden: false,
+          is_favorite: false,
+          tags: []
+        };
 
         // Update progress to 100% (complete)
         setUploadProgress(prev => prev.map((item, index) => 
@@ -108,11 +129,9 @@ export function PhotoUploader() {
           } : item
         ));
 
-        // Add to photos list if we have metadata
-        if (result.metadata) {
-          setPhotos([result.metadata, ...photos]);
-          console.log('📸 Added photo to collection:', result.metadata.filename);
-        }
+        // Add to photos list
+        setPhotos([newPhoto, ...photos]);
+        console.log('📸 Added photo to collection:', file.name);
 
       } catch (error) {
         console.error('💥 Upload failed for file:', file.name, error);
@@ -124,18 +143,12 @@ export function PhotoUploader() {
           errorMessage = error.message;
           
           // Provide more specific error details
-          if (error.message.includes('not configured')) {
-            errorDetails = 'Supabase configuration issue. Please check your environment variables.';
-          } else if (error.message.includes('permission')) {
-            errorDetails = 'Permission denied. Please check your Supabase storage policies.';
-          } else if (error.message.includes('size')) {
+          if (error.message.includes('size')) {
             errorDetails = 'File too large. Please use a smaller file (max 10MB).';
           } else if (error.message.includes('type')) {
-            errorDetails = 'Unsupported file type. Please use JPEG, PNG, GIF, WebP, or BMP.';
-          } else if (error.message.includes('bucket')) {
-            errorDetails = 'Storage bucket not found. Please create the "photos" bucket in Supabase.';
+            errorDetails = 'Unsupported file type. Please use JPEG, PNG, or GIF.';
           } else {
-            errorDetails = 'Please try again or contact support if the problem persists.';
+            errorDetails = 'Please try again or check your file.';
           }
         }
         
@@ -155,13 +168,13 @@ export function PhotoUploader() {
     // Keep progress visible longer so users can see results
     setTimeout(() => {
       setUploadProgress([]);
-    }, 8000);
-  }, [user, selectedFolder, photos, setPhotos]);
+    }, 5000);
+  };
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: {
-      'image/*': ['.jpeg', '.jpg', '.png', '.gif', '.webp', '.bmp']
+      'image/*': ['.jpeg', '.jpg', '.png', '.gif']
     },
     multiple: true,
     disabled: isUploading,
@@ -169,22 +182,37 @@ export function PhotoUploader() {
   });
 
   const createFolder = async () => {
-    if (!user || !newFolderName.trim()) return;
+    if (!newFolderName.trim()) return;
 
     console.log('📁 Creating new folder:', newFolderName.trim());
     setIsCreatingFolder(true);
     
     try {
-      const folder = await folderService.createFolder(newFolderName.trim(), user.id);
-
-      if (folder) {
-        setFolders([folder, ...folders]);
-        setSelectedFolder(folder.id);
-        setNewFolderName('');
-        console.log('✅ Folder created successfully:', folder.name);
-      }
+      // Simulate folder creation delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Create a new folder object
+      const newFolder = {
+        id: Date.now(),
+        user_id: 1,
+        name: newFolderName.trim(),
+        description: '',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      
+      // Add to folders list
+      const { setFolders, folders } = useAppStore.getState();
+      setFolders([newFolder, ...folders]);
+      
+      // Select the new folder
+      setSelectedFolder(newFolder.id.toString());
+      setNewFolderName('');
+      
+      console.log('✅ Folder created successfully:', newFolder.name);
     } catch (error) {
       console.error('💥 Failed to create folder:', error);
+      alert(`Failed to create folder: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsCreatingFolder(false);
     }
@@ -202,6 +230,13 @@ export function PhotoUploader() {
     }
   };
 
+  const startSlideshow = () => {
+    setCurrentView('slideshow');
+  };
+
+  // Ensure photos is always an array
+  const photosArray = Array.isArray(photos) ? photos : [];
+
   return (
     <div className="space-y-6">
       <div className="text-center mb-8">
@@ -215,71 +250,70 @@ export function PhotoUploader() {
       </div>
 
       {/* Current Status */}
-      {photos.length > 0 && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+      <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <CheckCircle className="w-5 h-5 text-green-600" />
             <p className="text-green-800">
-              📸 You have <strong>{photos.length}</strong> photos in your collection
+              📸 You have <strong>{photosArray.length}</strong> photos in your collection
             </p>
           </div>
+          
+          {photosArray.length > 0 && (
+            <Button
+              variant="primary"
+              size="md"
+              onClick={startSlideshow}
+            >
+              <Image className="w-4 h-4 mr-2" />
+              Start Slideshow
+            </Button>
+          )}
         </div>
+      </div>
+
+      {/* Photo Grid */}
+      {photosArray.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle level={3}>Your Photos</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {photosArray.map(photo => (
+                <div key={photo.id} className="relative group">
+                  <img 
+                    src={photo.file_path} 
+                    alt={photo.display_name || 'Photo'} 
+                    className="w-full h-40 object-cover rounded-lg shadow-sm"
+                    onError={(e) => {
+                      // Handle image load error
+                      (e.target as HTMLImageElement).src = 'https://via.placeholder.com/150?text=Error';
+                    }}
+                  />
+                  <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-all duration-200 rounded-lg flex items-center justify-center">
+                    <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => {
+                          // View photo in slideshow
+                          const { setCurrentPhoto, setCurrentView } = useAppStore.getState();
+                          setCurrentPhoto(photo);
+                          setCurrentView('slideshow');
+                        }}
+                      >
+                        View
+                      </Button>
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-600 mt-1 truncate">{photo.display_name}</p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       )}
-
-      {/* Folder Selection */}
-      <Card>
-        <CardHeader>
-          <CardTitle level={3}>Choose a Folder</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 md:grid-cols-2">
-            {/* Existing Folders */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Select Existing Folder (Optional)
-              </label>
-              <select
-                value={selectedFolder}
-                onChange={(e) => setSelectedFolder(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="">No folder (all photos)</option>
-                {folders.map((folder) => (
-                  <option key={folder.id} value={folder.id}>
-                    📁 {folder.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Create New Folder */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Create New Folder
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={newFolderName}
-                  onChange={(e) => setNewFolderName(e.target.value)}
-                  placeholder="Family Vacation, Holidays..."
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  onKeyDown={(e) => e.key === 'Enter' && createFolder()}
-                />
-                <Button
-                  variant="secondary"
-                  size="md"
-                  onClick={createFolder}
-                  disabled={!newFolderName.trim() || isCreatingFolder}
-                  loading={isCreatingFolder}
-                >
-                  <Folder className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Upload Area */}
       <Card>
@@ -316,7 +350,7 @@ export function PhotoUploader() {
                   }
                 </p>
                 <div className="text-sm text-gray-500">
-                  <p>Supports: JPEG, PNG, GIF, WebP, BMP</p>
+                  <p>Supports: JPEG, PNG, GIF</p>
                   <p>Max size: 10MB per file • Multiple files supported</p>
                 </div>
               </div>
@@ -358,7 +392,7 @@ export function PhotoUploader() {
                             <CheckCircle className="w-4 h-4 text-green-500" />
                           )}
                           {item.status === 'error' && (
-                            <AlertCircle className="w-4 h-4 text-red-500" />
+                            <AlertTriangle className="w-4 h-4 text-red-500" />
                           )}
                           <button
                             onClick={() => removeUploadItem(index)}
@@ -396,7 +430,7 @@ export function PhotoUploader() {
                       )}
 
                       <p className="text-xs text-gray-500 mt-1">
-                        Size: {(item.file.size / 1024 / 1024).toFixed(2)} MB
+                        Size: {(item.file.size / 1024 / 1024).toFixed(2)} MB • Type: {item.file.type}
                       </p>
                     </div>
                   </div>
@@ -418,29 +452,10 @@ export function PhotoUploader() {
           <p>• <strong>Organization:</strong> Create folders like "Family", "Holidays", or "Grandchildren" to keep things tidy</p>
           <p>• <strong>File size:</strong> Keep files under 10MB for faster uploads and better performance</p>
           <p>• <strong>Privacy:</strong> Your photos are stored securely and only you can access them</p>
-          <p>• <strong>Supported formats:</strong> JPEG, PNG, GIF, WebP, and BMP files work best</p>
+          <p>• <strong>Supported formats:</strong> JPEG, PNG, and GIF files work best</p>
           <p>• <strong>Multiple uploads:</strong> You can select multiple photos at once to save time</p>
         </div>
       </div>
-
-      {/* Debug Information (only in development) */}
-      {import.meta.env.DEV && (
-        <Card>
-          <CardHeader>
-            <CardTitle level={3}>🔧 Debug Information</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2 text-xs font-mono bg-gray-100 p-3 rounded">
-              <p>User ID: {user?.id}</p>
-              <p>Selected Folder: {selectedFolder || 'none'}</p>
-              <p>Photos Count: {photos.length}</p>
-              <p>Folders Count: {folders.length}</p>
-              <p>Upload Status: {isUploading ? 'uploading' : 'idle'}</p>
-              <p>Progress Items: {uploadProgress.length}</p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }

@@ -20,9 +20,11 @@ export class VoiceService {
   private wakWordDetected: boolean = false;
   private startTimeout: NodeJS.Timeout | null = null;
   private isInitialized: boolean = false;
+  private isManuallyRestarting: boolean = false; // Flag to prevent conflicts
 
   constructor() {
     this.initializeSpeechRecognition();
+    console.log('🎤 VoiceService initialized - microphone OFF by default');
   }
 
   /**
@@ -45,18 +47,19 @@ export class VoiceService {
         this.recognition.maxAlternatives = 1;
 
         this.recognition.onstart = () => {
-          console.log('Voice recognition started');
+          console.log('🎤 Voice recognition started');
           this.isListening = true;
+          this.isManuallyRestarting = false; // Clear restart flag
         };
 
         this.recognition.onend = () => {
-          console.log('Voice recognition ended');
+          console.log('🎤 Voice recognition ended');
           this.isListening = false;
           
-          // Restart if in continuous mode and not manually stopped
-          if (this.continuous && this.recognition) {
+          // Only restart if in continuous mode and not manually restarting
+          if (this.continuous && this.recognition && !this.isManuallyRestarting) {
             this.startTimeout = setTimeout(() => {
-              if (this.continuous && !this.isListening) {
+              if (this.continuous && !this.isListening && !this.isManuallyRestarting) {
                 this.startListeningInternal(true);
               }
             }, 1000);
@@ -73,6 +76,12 @@ export class VoiceService {
             this.continuous = false;
           }
           
+          // Don't treat 'no-speech' as a critical error - it's normal
+          if (event.error === 'no-speech') {
+            console.log('No speech detected - this is normal behavior');
+            return; // Don't call error callback for no-speech
+          }
+          
           this.onErrorCallback?.(event.error);
         };
 
@@ -81,6 +90,7 @@ export class VoiceService {
         };
 
         this.isInitialized = true;
+        console.log('🎤 Speech recognition initialized successfully');
       }
     } catch (error) {
       console.error('Failed to initialize speech recognition:', error);
@@ -179,20 +189,24 @@ export class VoiceService {
       return;
     }
 
+    console.log('🎤 Starting voice recognition (user initiated)');
+
     // Clear any pending start timeout
     if (this.startTimeout) {
       clearTimeout(this.startTimeout);
       this.startTimeout = null;
     }
 
-    // If already listening, stop first
+    // If already listening, stop first and wait before restarting
     if (this.isListening) {
       console.log('Already listening, stopping first...');
+      this.isManuallyRestarting = true; // Prevent auto-restart during manual restart
       this.stopListening();
-      // Wait a bit before restarting
+      
+      // Wait for the recognition to fully stop before restarting
       setTimeout(() => {
         this.startListeningInternal(continuous);
-      }, 500);
+      }, 1000);
       return;
     }
 
@@ -211,6 +225,7 @@ export class VoiceService {
     this.wakWordDetected = !continuous; // If continuous, skip wake word requirement
 
     try {
+      console.log('Starting speech recognition...', { continuous });
       this.recognition.start();
     } catch (error) {
       console.error('Failed to start speech recognition:', error);
@@ -218,14 +233,17 @@ export class VoiceService {
       
       // If recognition is already started, try to stop and restart
       if (error instanceof Error && error.message.includes('already started')) {
+        console.log('Recognition already started, attempting to stop and restart...');
+        this.isManuallyRestarting = true;
         try {
           this.recognition.stop();
           setTimeout(() => {
             if (this.recognition && !this.isListening) {
-              this.recognition.start();
+              this.startListeningInternal(continuous);
             }
-          }, 1000);
+          }, 1500); // Longer delay to ensure full stop
         } catch (restartError) {
+          console.error('Failed to restart voice recognition:', restartError);
           this.onErrorCallback?.('Failed to restart voice recognition');
         }
       } else {
@@ -238,12 +256,15 @@ export class VoiceService {
    * Stop listening
    */
   stopListening() {
+    console.log('🎤 Stopping voice recognition (user initiated)');
+    
     // Clear any pending restart timeout
     if (this.startTimeout) {
       clearTimeout(this.startTimeout);
       this.startTimeout = null;
     }
 
+    // Disable continuous mode
     this.continuous = false;
     
     if (this.recognition && this.isListening) {
@@ -303,6 +324,7 @@ export class VoiceService {
    * Cleanup method
    */
   cleanup() {
+    console.log('🎤 Cleaning up voice service...');
     this.stopListening();
     if (this.startTimeout) {
       clearTimeout(this.startTimeout);

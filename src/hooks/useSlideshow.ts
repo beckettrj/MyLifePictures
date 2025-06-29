@@ -1,6 +1,6 @@
 /**
  * Custom hook for managing slideshow functionality
- * Handles image transitions, timing, and navigation
+ * Simplified to work without database connections
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -38,38 +38,43 @@ export function useSlideshow(): SlideshowHook {
    * Filter and sort photos based on slideshow settings
    */
   const preparePhotos = useCallback(() => {
-    if (!photos.length) {
+    // Ensure photos is a valid array before proceeding
+    if (!Array.isArray(photos) || photos.length === 0) {
+      console.log('No photos available for slideshow');
       setDisplayPhotos([]);
       return;
     }
 
-    let filteredPhotos = photos.filter(photo => {
-      // Filter by selected folders
-      if (slideshowSettings.folders.length > 0) {
-        return slideshowSettings.folders.includes(photo.folder_id || '');
-      }
-      return !photo.is_hidden;
-    });
+    console.log('Preparing photos for slideshow, count:', photos.length);
+    let filteredPhotos = [...photos]; // Create a copy to avoid mutating the original
 
     // Sort photos based on mode
     switch (slideshowSettings.mode) {
       case 'sequential':
-        filteredPhotos.sort((a, b) => a.display_name.localeCompare(b.display_name));
+        filteredPhotos.sort((a, b) => {
+          const nameA = a.display_name || '';
+          const nameB = b.display_name || '';
+          return nameA.localeCompare(nameB);
+        });
         break;
       case 'reverse':
-        filteredPhotos.sort((a, b) => b.display_name.localeCompare(a.display_name));
+        filteredPhotos.sort((a, b) => {
+          const nameA = a.display_name || '';
+          const nameB = b.display_name || '';
+          return nameB.localeCompare(nameA);
+        });
         break;
       case 'date-asc':
         filteredPhotos.sort((a, b) => {
-          const dateA = new Date(a.taken_at || a.created_at);
-          const dateB = new Date(b.taken_at || b.created_at);
+          const dateA = new Date(a.created_at);
+          const dateB = new Date(b.created_at);
           return dateA.getTime() - dateB.getTime();
         });
         break;
       case 'date-desc':
         filteredPhotos.sort((a, b) => {
-          const dateA = new Date(a.taken_at || a.created_at);
-          const dateB = new Date(b.taken_at || b.created_at);
+          const dateA = new Date(a.created_at);
+          const dateB = new Date(b.created_at);
           return dateB.getTime() - dateA.getTime();
         });
         break;
@@ -83,14 +88,16 @@ export function useSlideshow(): SlideshowHook {
         break;
     }
 
+    console.log('Prepared photos for slideshow, count:', filteredPhotos.length);
     setDisplayPhotos(filteredPhotos);
 
     // Set first photo if none selected
     if (filteredPhotos.length > 0 && !currentPhoto) {
+      console.log('Setting initial photo for slideshow');
       setCurrentPhoto(filteredPhotos[0]);
       updateSlideshowSettings({ current_index: 0 });
     }
-  }, [photos, slideshowSettings.folders, slideshowSettings.mode, currentPhoto, setCurrentPhoto, updateSlideshowSettings]);
+  }, [photos, slideshowSettings.mode, currentPhoto, setCurrentPhoto, updateSlideshowSettings]);
 
   /**
    * Navigate to next photo
@@ -156,11 +163,13 @@ export function useSlideshow(): SlideshowHook {
    */
   useEffect(() => {
     if (slideshowSettings.is_playing && displayPhotos.length > 0) {
+      console.log(`Starting slideshow interval timer: ${slideshowSettings.interval} seconds`);
       intervalRef.current = setInterval(() => {
         nextPhoto();
       }, slideshowSettings.interval * 1000);
     } else {
       if (intervalRef.current) {
+        console.log('Clearing slideshow interval timer');
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
@@ -177,6 +186,7 @@ export function useSlideshow(): SlideshowHook {
    * Prepare photos when dependencies change
    */
   useEffect(() => {
+    console.log('Preparing photos for slideshow (dependency change)');
     preparePhotos();
   }, [preparePhotos]);
 

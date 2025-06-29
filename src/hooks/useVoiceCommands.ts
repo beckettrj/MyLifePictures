@@ -242,6 +242,7 @@ export function useVoiceCommands(): VoiceCommandsHook {
       return;
     }
 
+    console.log('🎤 User manually starting voice recognition');
     voiceService.setWakeWord(settings.wake_word);
     const continuous = settings.voice_activation === 'always-on';
     voiceService.startListening(continuous);
@@ -252,6 +253,7 @@ export function useVoiceCommands(): VoiceCommandsHook {
    * Stop voice recognition
    */
   const stopListening = useCallback(() => {
+    console.log('🎤 User manually stopping voice recognition');
     voiceService.stopListening();
     setListening(false);
   }, [setListening]);
@@ -270,17 +272,22 @@ export function useVoiceCommands(): VoiceCommandsHook {
   }, [handleVoiceCommand, handleVoiceError]);
 
   /**
-   * Auto-start listening based on settings
+   * DO NOT auto-start listening - microphone starts OFF
+   * Only start when user explicitly clicks the microphone button
    */
   useEffect(() => {
-    if (settings.voice_activation === 'always-on' || settings.voice_activation === 'wake-word') {
-      startListening();
+    console.log('🎤 Voice commands hook initialized - microphone OFF by default');
+    
+    // Ensure microphone is off on initialization
+    if (isListening) {
+      console.log('🎤 Turning off microphone on initialization');
+      stopListening();
     }
     
     return () => {
       stopListening();
     };
-  }, [settings.voice_activation, startListening, stopListening]);
+  }, []); // Empty dependency array - only run on mount/unmount
 
   /**
    * Cleanup on unmount

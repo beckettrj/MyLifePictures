@@ -31,7 +31,6 @@ export function PhotoCaption({
     }
   };
 
-  const takenDate = formatDate(photo.taken_at);
   const uploadDate = formatDate(photo.created_at);
 
   return (
@@ -49,7 +48,7 @@ export function PhotoCaption({
       <div className="max-w-4xl mx-auto">
         {/* Photo Title */}
         <h2 className="text-2xl md:text-3xl font-semibold mb-3 leading-tight">
-          {photo.display_name}
+          {photo.display_name || 'Untitled Photo'}
         </h2>
 
         {/* Photo Details */}
@@ -60,10 +59,10 @@ export function PhotoCaption({
           </span>
 
           {/* Date Taken */}
-          {takenDate && (
+          {uploadDate && (
             <div className="flex items-center gap-1">
               <Calendar className="w-4 h-4" />
-              <span>{takenDate}</span>
+              <span>{uploadDate}</span>
             </div>
           )}
 
@@ -84,20 +83,6 @@ export function PhotoCaption({
           )}
         </div>
 
-        {/* Photo Annotation */}
-        {photo.annotation && (
-          <motion.div
-            className="bg-black/40 rounded-lg p-4 mb-3"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.5 }}
-          >
-            <p className="text-base md:text-lg leading-relaxed italic">
-              "{photo.annotation}"
-            </p>
-          </motion.div>
-        )}
-
         {/* Tags */}
         {photo.tags && photo.tags.length > 0 && (
           <div className="flex flex-wrap gap-2">
@@ -113,7 +98,7 @@ export function PhotoCaption({
         )}
 
         {/* Upload Date (fallback) */}
-        {!takenDate && uploadDate && (
+        {uploadDate && (
           <p className="text-xs text-gray-400 mt-2">
             Added {uploadDate}
           </p>

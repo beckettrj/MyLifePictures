@@ -1,6 +1,6 @@
 /**
  * Main application layout component
- * Handles navigation, responsive breakpoints, and global UI structure
+ * Updated to always show navigation when no photos are available
  */
 
 import React from 'react';
@@ -16,7 +16,7 @@ interface LayoutProps {
 }
 
 export function Layout({ children }: LayoutProps) {
-  const { currentView, settings } = useAppStore();
+  const { currentView, settings, photos } = useAppStore();
   const { 
     startListening, 
     stopListening, 
@@ -27,18 +27,25 @@ export function Layout({ children }: LayoutProps) {
 
   const toggleVoiceListening = () => {
     if (isListening) {
+      console.log('🎤 User stopping voice recognition');
       stopListening();
     } else {
+      console.log('🎤 User starting voice recognition');
       startListening();
     }
   };
 
-  // Hide sidebar in slideshow mode for immersive experience
-  const showSidebar = currentView !== 'slideshow';
-  const showHeader = currentView !== 'slideshow';
+  // Hide sidebar and header in slideshow mode ONLY if there are photos
+  // Always show navigation when no photos are available
+  const hasPhotos = Array.isArray(photos) && photos.length > 0;
+  const showSidebar = currentView !== 'slideshow' || !hasPhotos;
+  const showHeader = currentView !== 'slideshow' || !hasPhotos;
+
+  // Apply theme based on settings
+  const themeClass = settings.theme === 'dark' ? 'dark-theme' : '';
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className={`min-h-screen bg-gray-50 flex ${themeClass}`}>
       {/* Sidebar */}
       {showSidebar && (
         <motion.aside
@@ -67,7 +74,7 @@ export function Layout({ children }: LayoutProps) {
         )}
 
         {/* Main Content */}
-        <main className={`flex-1 ${showHeader ? '' : 'h-screen'}`}>
+        <main className={`flex-1 ${showHeader ? '' : 'h-screen'} relative`}>
           <motion.div
             key={currentView}
             initial={{ opacity: 0, y: 20 }}
@@ -81,19 +88,46 @@ export function Layout({ children }: LayoutProps) {
         </main>
       </div>
 
-      {/* Voice Indicator - Always visible */}
-      <VoiceIndicator
-        isListening={isListening}
-        isProcessing={isProcessingCommand}
-        lastCommand={lastCommand}
-        onToggleListening={toggleVoiceListening}
-      />
+      {/* Voice Indicator - Only show when in slideshow mode with photos */}
+      {currentView === 'slideshow' && hasPhotos && (
+        <VoiceIndicator
+          isListening={isListening}
+          isProcessing={isProcessingCommand}
+          lastCommand={lastCommand}
+          onToggleListening={toggleVoiceListening}
+        />
+      )}
 
       {/* Global Styles for High Contrast Mode */}
       {settings.high_contrast && (
         <style>{`
           * {
             filter: contrast(150%) !important;
+          }
+        `}</style>
+      )}
+
+      {/* Dark Theme Styles */}
+      {settings.theme === 'dark' && (
+        <style>{`
+          .dark-theme {
+            background-color: #1a1a1a;
+            color: #f0f0f0;
+          }
+          .dark-theme .bg-white {
+            background-color: #2a2a2a !important;
+          }
+          .dark-theme .text-gray-900 {
+            color: #f0f0f0 !important;
+          }
+          .dark-theme .text-gray-700, .dark-theme .text-gray-800, .dark-theme .text-gray-600 {
+            color: #d0d0d0 !important;
+          }
+          .dark-theme .border-gray-200 {
+            border-color: #3a3a3a !important;
+          }
+          .dark-theme .bg-gray-50, .dark-theme .bg-gray-100 {
+            background-color: #333333 !important;
           }
         `}</style>
       )}

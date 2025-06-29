@@ -1,9 +1,9 @@
 /**
- * Application sidebar navigation
- * Provides easy access to all main features
+ * Application sidebar navigation - Updated with developer mode support
+ * Provides easy access to main features and hidden developer tools
  */
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { 
   Play, 
@@ -16,33 +16,34 @@ import {
   Folder,
   BarChart3,
   Database,
-  Cloud
+  Cloud,
+  User,
+  TestTube,
+  Code
 } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
 import { Button } from '../ui/Button';
+import { supabase } from '../../services/supabase';
 
 interface NavItem {
   id: string;
   label: string;
   icon: React.ReactNode;
-  view: 'setup' | 'slideshow' | 'settings' | 'photos' | 'test' | 'microphone' | 'storage';
+  view: 'setup' | 'slideshow' | 'settings' | 'photos' | 'dev-panel';
   description: string;
+  category: 'main' | 'dev';
+  requiresDeveloperMode?: boolean;
 }
 
 const navItems: NavItem[] = [
-  {
-    id: 'storage',
-    label: 'Setup Storage',
-    icon: <Cloud className="w-5 h-5" />,
-    view: 'storage',
-    description: 'Configure storage buckets',
-  },
+  // Main Features
   {
     id: 'slideshow',
     label: 'Start Slideshow',
     icon: <Play className="w-5 h-5" />,
     view: 'slideshow',
     description: 'Begin your photo journey',
+    category: 'main',
   },
   {
     id: 'photos',
@@ -50,27 +51,7 @@ const navItems: NavItem[] = [
     icon: <Image className="w-5 h-5" />,
     view: 'photos',
     description: 'Upload and organize',
-  },
-  {
-    id: 'setup',
-    label: 'AI Setup',
-    icon: <Brain className="w-5 h-5" />,
-    view: 'setup',
-    description: 'Configure your assistant',
-  },
-  {
-    id: 'microphone',
-    label: 'Test Microphone',
-    icon: <Mic className="w-5 h-5" />,
-    view: 'microphone',
-    description: 'Test voice commands',
-  },
-  {
-    id: 'test',
-    label: 'Test Supabase',
-    icon: <Database className="w-5 h-5" />,
-    view: 'test',
-    description: 'Check database connection',
+    category: 'main',
   },
   {
     id: 'settings',
@@ -78,41 +59,96 @@ const navItems: NavItem[] = [
     icon: <Settings className="w-5 h-5" />,
     view: 'settings',
     description: 'Personalize your experience',
+    category: 'main',
+  },
+
+  // Developer Tools (hidden unless developer mode is enabled)
+  {
+    id: 'dev-panel',
+    label: 'Developer Panel',
+    icon: <Code className="w-5 h-5" />,
+    view: 'dev-panel',
+    description: 'AI setup & debugging tools',
+    category: 'dev',
+    requiresDeveloperMode: true,
   },
 ];
 
 export function Sidebar() {
-  const { currentView, setCurrentView, photos, folders, settings } = useAppStore();
+  const { currentView, setCurrentView, photos, folders, settings, user } = useAppStore();
+  const [photoCount, setPhotoCount] = useState(0);
+  const [folderCount, setFolderCount] = useState(0);
+  const [favoriteCount, setFavoriteCount] = useState(0);
 
-  const getStats = () => {
-    return {
-      totalPhotos: photos.length,
-      totalFolders: folders.length,
-      favoritePhotos: photos.filter(p => p.is_favorite).length,
+  // Fetch photo count from database
+  useEffect(() => {
+    const fetchPhotoCount = async () => {
+      if (!user) return;
+      
+      try {
+        // Get photo count from the database
+        const { count, error } = await supabase
+          .from('photos')
+          .select('*', { count: 'exact', head: true });
+        
+        if (error) {
+          console.error('Error fetching photo count:', error);
+          // Fallback to local photos array
+          const photoArray = Array.isArray(photos) ? photos : [];
+          setPhotoCount(photoArray.length);
+        } else {
+          console.log('Photo count from database:', count);
+          setPhotoCount(count || 0);
+        }
+      } catch (error) {
+        console.error('Failed to fetch photo count:', error);
+        // Fallback to local photos array
+        const photoArray = Array.isArray(photos) ? photos : [];
+        setPhotoCount(photoArray.length);
+      }
     };
-  };
+    
+    fetchPhotoCount();
+    
+    // Set up interval to refresh count every 5 seconds
+    const interval = setInterval(fetchPhotoCount, 5000);
+    
+    return () => clearInterval(interval);
+  }, [user, photos]);
 
-  const stats = getStats();
+  // Calculate stats from local data as fallback
+  useEffect(() => {
+    // Ensure photos is an array before using filter
+    const photoArray = Array.isArray(photos) ? photos : [];
+    const folderArray = Array.isArray(folders) ? folders : [];
+    
+    // Use local data as fallback
+    if (photoArray.length > 0) {
+      setPhotoCount(photoArray.length);
+      setFavoriteCount(photoArray.filter(p => p.is_favorite).length);
+    }
+    
+    if (folderArray.length > 0) {
+      setFolderCount(folderArray.length);
+    }
+  }, [photos, folders]);
 
-  return (
-    <div className="h-full flex flex-col bg-white">
-      {/* Logo and Title */}
-      <div className="p-6 border-b border-gray-200">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-            <Heart className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <h2 className="font-bold text-gray-900">MyLifePictures</h2>
-            <p className="text-xs text-gray-600">AI-Powered Memories</p>
-          </div>
-        </div>
-      </div>
+  const renderNavSection = (category: NavItem['category'], title: string) => {
+    const items = navItems.filter(item => {
+      if (item.category !== category) return false;
+      if (item.requiresDeveloperMode && !settings.developer_mode) return false;
+      return true;
+    });
+    
+    if (items.length === 0) return null;
 
-      {/* Navigation */}
-      <nav className="flex-1 p-4">
-        <div className="space-y-2">
-          {navItems.map((item, index) => (
+    return (
+      <div className="mb-6">
+        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 px-4">
+          {title}
+        </h3>
+        <div className="space-y-1">
+          {items.map((item, index) => (
             <motion.div
               key={item.id}
               initial={{ opacity: 0, x: -20 }}
@@ -125,11 +161,12 @@ export function Sidebar() {
                 fullWidth
                 onClick={() => setCurrentView(item.view)}
                 className={`
-                  justify-start text-left h-auto py-4 px-4
+                  justify-start text-left h-auto py-3 px-4 mx-2
                   ${currentView === item.view 
                     ? 'bg-blue-600 text-white' 
                     : 'text-gray-700 hover:bg-gray-100'
                   }
+                  ${item.requiresDeveloperMode ? 'border-l-4 border-orange-400' : ''}
                 `}
               >
                 <div className="flex items-center gap-3 w-full">
@@ -149,6 +186,46 @@ export function Sidebar() {
             </motion.div>
           ))}
         </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="h-full flex flex-col bg-white">
+      {/* Logo and Title */}
+      <div className="p-6 border-b border-gray-200">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+            <Heart className="w-6 h-6 text-white" />
+          </div>
+          <div>
+            <h2 className="font-bold text-gray-900">MyLifePictures</h2>
+            <p className="text-xs text-gray-600">AI-Powered Memories</p>
+          </div>
+        </div>
+      </div>
+
+      {/* User Status */}
+      {user && (
+        <div className="p-4 border-b border-gray-200">
+          <div className="bg-green-50 rounded-lg p-3">
+            <div className="flex items-center gap-2 mb-1">
+              <User className="w-4 h-4 text-green-600" />
+              <span className="text-sm font-medium text-green-900">
+                Signed In
+              </span>
+            </div>
+            <p className="text-xs text-green-700 truncate">
+              {user.email}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Navigation */}
+      <nav className="flex-1 py-4 overflow-y-auto">
+        {renderNavSection('main', 'Main Features')}
+        {renderNavSection('dev', 'Developer Tools')}
       </nav>
 
       {/* Stats Section */}
@@ -164,7 +241,7 @@ export function Sidebar() {
               <Image className="w-4 h-4" />
               Photos
             </span>
-            <span className="font-medium text-gray-900">{stats.totalPhotos}</span>
+            <span className="font-medium text-gray-900">{photoCount}</span>
           </div>
           
           <div className="flex items-center justify-between">
@@ -172,7 +249,7 @@ export function Sidebar() {
               <Folder className="w-4 h-4" />
               Folders
             </span>
-            <span className="font-medium text-gray-900">{stats.totalFolders}</span>
+            <span className="font-medium text-gray-900">{folderCount}</span>
           </div>
           
           <div className="flex items-center justify-between">
@@ -180,7 +257,7 @@ export function Sidebar() {
               <Heart className="w-4 h-4" />
               Favorites
             </span>
-            <span className="font-medium text-gray-900">{stats.favoritePhotos}</span>
+            <span className="font-medium text-gray-900">{favoriteCount}</span>
           </div>
         </div>
       </div>
@@ -199,6 +276,23 @@ export function Sidebar() {
           </p>
         </div>
       </div>
+
+      {/* Developer Mode Indicator */}
+      {settings.developer_mode && (
+        <div className="p-4 border-t border-gray-200">
+          <div className="bg-orange-50 rounded-lg p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <Code className="w-4 h-4 text-orange-600" />
+              <span className="text-sm font-medium text-orange-900">
+                Developer Mode
+              </span>
+            </div>
+            <p className="text-xs text-orange-700">
+              Advanced debugging tools are enabled. Disable in Settings if not needed.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

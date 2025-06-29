@@ -13,7 +13,8 @@ import {
   RotateCcw, 
   Shuffle,
   Moon,
-  Sun
+  Sun,
+  Grid
 } from 'lucide-react';
 import { useSlideshow } from '../../hooks/useSlideshow';
 import { useAppStore } from '../../store/useAppStore';
@@ -24,7 +25,7 @@ interface SlideshowControlsProps {
 }
 
 export function SlideshowControls({ className = '' }: SlideshowControlsProps) {
-  const { slideshowSettings, updateSlideshowSettings } = useAppStore();
+  const { slideshowSettings, updateSlideshowSettings, setCurrentView } = useAppStore();
   const { 
     isPlaying, 
     canGoNext, 
@@ -40,6 +41,10 @@ export function SlideshowControls({ className = '' }: SlideshowControlsProps) {
     updateSlideshowSettings({ 
       night_mode_active: !slideshowSettings.night_mode_active 
     });
+  };
+
+  const exitToPhotoManager = () => {
+    setCurrentView('photos');
   };
 
   return (
@@ -137,6 +142,18 @@ export function SlideshowControls({ className = '' }: SlideshowControlsProps) {
         ) : (
           <Moon className="w-5 h-5" />
         )}
+      </Button>
+
+      {/* Exit to Photo Manager Button */}
+      <Button
+        variant="ghost"
+        size="lg"
+        onClick={exitToPhotoManager}
+        className="text-white hover:bg-white/20 border-white/30"
+        aria-label="Exit to photo manager"
+        title="Manage Photos"
+      >
+        <Grid className="w-5 h-5" />
       </Button>
     </motion.div>
   );

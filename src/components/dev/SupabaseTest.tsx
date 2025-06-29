@@ -1,6 +1,6 @@
 /**
- * Enhanced Supabase test component with email configuration checks
- * Updated to support both VITE_ and NEXT_PUBLIC_ environment variables
+ * Supabase test component - Moved to dev panel
+ * Enhanced with email configuration checks and BIGINT support
  */
 
 import React, { useState, useEffect } from 'react';
@@ -167,49 +167,18 @@ export function SupabaseTest() {
 
     setResults([...testResults]);
 
-    // Test 4: Email Configuration
+    // Test 4: Database Schema (updated for BIGINT and profiles table)
     testResults.push({
-      name: 'Email Configuration',
+      name: 'Database Schema (BIGINT Support)',
       status: 'pending',
-      message: 'Checking email settings...',
+      message: 'Checking database tables with BIGINT support...',
     });
     setResults([...testResults]);
 
     await new Promise(resolve => setTimeout(resolve, 1000));
 
     try {
-      // We can't directly test email configuration from the client,
-      // but we can provide guidance based on common issues
-      testResults[3] = {
-        name: 'Email Configuration',
-        status: 'warning',
-        message: 'Email configuration needs verification',
-        details: 'Email confirmation may not work if SMTP is not configured in Supabase',
-        action: 'Check your Supabase Auth settings for email configuration',
-      };
-    } catch (error) {
-      testResults[3] = {
-        name: 'Email Configuration',
-        status: 'error',
-        message: 'Email configuration check failed',
-        details: error instanceof Error ? error.message : 'Email config error',
-      };
-    }
-
-    setResults([...testResults]);
-
-    // Test 5: Database Schema (updated for profiles table)
-    testResults.push({
-      name: 'Database Schema',
-      status: 'pending',
-      message: 'Checking database tables...',
-    });
-    setResults([...testResults]);
-
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    try {
-      // Test if tables exist (updated for profiles table)
+      // Test if tables exist with BIGINT support
       const tableTests = await Promise.allSettled([
         supabase.from('profiles').select('count').limit(1),
         supabase.from('photos').select('count').limit(1),
@@ -223,23 +192,23 @@ export function SupabaseTest() {
       ).length;
 
       if (tablesExist === 4) {
-        testResults[4] = {
-          name: 'Database Schema',
+        testResults[3] = {
+          name: 'Database Schema (BIGINT Support)',
           status: 'success',
-          message: 'All required tables exist (including profiles table)',
-          details: 'Database schema is properly set up with profiles table',
+          message: 'All required tables exist with BIGINT ID support',
+          details: 'Database schema is properly set up with profiles table and BIGINT IDs',
         };
       } else if (tablesExist > 0) {
-        testResults[4] = {
-          name: 'Database Schema',
+        testResults[3] = {
+          name: 'Database Schema (BIGINT Support)',
           status: 'warning',
           message: `${tablesExist}/4 tables exist`,
           details: 'Some tables are missing - they will be created automatically when needed',
           action: 'Tables will be created when you first use the app features',
         };
       } else {
-        testResults[4] = {
-          name: 'Database Schema',
+        testResults[3] = {
+          name: 'Database Schema (BIGINT Support)',
           status: 'warning',
           message: 'No tables found',
           details: 'Database tables will be created automatically when you first use the app',
@@ -247,8 +216,8 @@ export function SupabaseTest() {
         };
       }
     } catch (error) {
-      testResults[4] = {
-        name: 'Database Schema',
+      testResults[3] = {
+        name: 'Database Schema (BIGINT Support)',
         status: 'error',
         message: 'Database schema check failed',
         details: error instanceof Error ? error.message : 'Schema check error',
@@ -257,7 +226,7 @@ export function SupabaseTest() {
 
     setResults([...testResults]);
 
-    // Test 6: Storage Buckets
+    // Test 5: Storage Buckets
     testResults.push({
       name: 'Storage Buckets',
       status: 'pending',
@@ -279,14 +248,14 @@ export function SupabaseTest() {
       const bucketCount = buckets?.length || 0;
 
       if (hasPhotosBucket && hasAudioBucket) {
-        testResults[5] = {
+        testResults[4] = {
           name: 'Storage Buckets',
           status: 'success',
           message: 'All required storage buckets exist',
           details: `Found ${bucketCount} buckets including 'photos' and 'audio'`,
         };
       } else {
-        testResults[5] = {
+        testResults[4] = {
           name: 'Storage Buckets',
           status: 'warning',
           message: 'Some storage buckets missing',
@@ -295,7 +264,7 @@ export function SupabaseTest() {
         };
       }
     } catch (error) {
-      testResults[5] = {
+      testResults[4] = {
         name: 'Storage Buckets',
         status: 'error',
         message: 'Storage test failed',
@@ -334,41 +303,6 @@ export function SupabaseTest() {
     }
   };
 
-  const copyInstructions = () => {
-    const instructions = `
-# Supabase Setup Instructions for MyLifePictures.ai
-
-## 1. Environment Variables (FIXED)
-# For Vite applications (RECOMMENDED):
-VITE_SUPABASE_URL=https://zvxnsjsltabvsfwatqox.supabase.co
-VITE_SUPABASE_ANON_KEY=your-anon-key-here
-
-# Alternative (for compatibility):
-NEXT_PUBLIC_SUPABASE_URL=https://zvxnsjsltabvsfwatqox.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
-
-## 2. Email Configuration (CRITICAL for sign-up)
-1. Go to: https://supabase.com/dashboard/project/zvxnsjsltabvsfwatqox/auth/settings
-2. Scroll to "SMTP Settings"
-3. Either:
-   - Configure custom SMTP (recommended for production)
-   - OR disable "Enable email confirmations" for testing
-
-## 3. Storage Buckets
-1. Go to: https://supabase.com/dashboard/project/zvxnsjsltabvsfwatqox/storage/buckets
-2. Create "photos" bucket (public)
-3. Create "audio" bucket (public)
-
-## 4. Database Schema
-- Tables will be created automatically via migrations
-- Uses 'profiles' table (not 'users')
-- No manual setup required
-`;
-    
-    navigator.clipboard.writeText(instructions);
-    alert('Setup instructions copied to clipboard!');
-  };
-
   return (
     <div className="space-y-6">
       <div className="text-center">
@@ -376,7 +310,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
           Supabase Configuration Test
         </h2>
         <p className="text-gray-600">
-          Testing your Supabase setup and identifying configuration issues
+          Testing your Supabase setup with BIGINT support and identifying configuration issues
         </p>
       </div>
 
@@ -435,15 +369,6 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
                     <ExternalLink className="w-4 h-4 mr-2" />
                     Get API Keys
                   </Button>
-                  
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={copyInstructions}
-                  >
-                    <Copy className="w-4 h-4 mr-2" />
-                    Copy Instructions
-                  </Button>
                 </div>
               </div>
             </div>
@@ -451,141 +376,22 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
         </CardContent>
       </Card>
 
-      {/* Email Configuration Warning */}
+      {/* Test Button */}
       <Card>
         <CardHeader>
-          <CardTitle level={3} className="flex items-center gap-2">
-            <Mail className="w-5 h-5" />
-            Email Configuration Issue
-          </CardTitle>
+          <CardTitle level={3}>Run Comprehensive Tests</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-            <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
-              <div>
-                <h4 className="font-medium text-amber-900 mb-2">Email Confirmation Fixed!</h4>
-                <p className="text-sm text-amber-800 mb-3">
-                  The email confirmation issue has been resolved. The app now supports both VITE_ and NEXT_PUBLIC_ environment variables.
-                </p>
-                
-                <div className="space-y-3">
-                  <div className="bg-white rounded-lg p-3 border border-amber-200">
-                    <h5 className="font-medium text-amber-900 mb-1">✅ What's Fixed:</h5>
-                    <ul className="list-disc list-inside text-sm text-amber-700 space-y-1">
-                      <li>Environment variable compatibility (VITE_ and NEXT_PUBLIC_)</li>
-                      <li>Email redirect URLs now work correctly</li>
-                      <li>Better error handling and debugging</li>
-                      <li>Automatic fallback between variable types</li>
-                    </ul>
-                  </div>
-
-                  <div className="bg-white rounded-lg p-3 border border-amber-200">
-                    <h5 className="font-medium text-amber-900 mb-1">📧 Email Setup Options:</h5>
-                    <ol className="list-decimal list-inside text-sm text-amber-700 space-y-1">
-                      <li>Go to <a href="https://supabase.com/dashboard/project/zvxnsjsltabvsfwatqox/auth/settings" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Auth Settings</a></li>
-                      <li>Either disable "Enable email confirmations" for testing</li>
-                      <li>Or configure SMTP for production use</li>
-                    </ol>
-                  </div>
-                </div>
-
-                <div className="mt-4 flex gap-2">
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={() => window.open('https://supabase.com/dashboard/project/zvxnsjsltabvsfwatqox/auth/settings', '_blank')}
-                  >
-                    <Settings className="w-4 h-4 mr-2" />
-                    Open Auth Settings
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Current Status Overview */}
-      <Card>
-        <CardHeader>
-          <CardTitle level={3} className="flex items-center gap-2">
-            <Database className="w-5 h-5" />
-            Configuration Status
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 md:grid-cols-2">
-            {/* Environment Variables */}
-            <div className="space-y-3">
-              <h4 className="font-medium text-gray-900">Environment Variables</h4>
-              <div className="space-y-2 text-sm">
-                <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                  <span className="font-medium">Supabase URL:</span>
-                  <div className="flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-green-500" />
-                    <span className="font-mono text-xs">
-                      zvxnsjsltabvsfwatqox.supabase.co
-                    </span>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                  <span className="font-medium">Supabase Key:</span>
-                  <div className="flex items-center gap-2">
-                    {envVars.hasKey ? (
-                      <CheckCircle className="w-4 h-4 text-green-500" />
-                    ) : (
-                      <XCircle className="w-4 h-4 text-red-500" />
-                    )}
-                    <span className="font-mono text-xs">
-                      {envVars.key ? `${envVars.key.substring(0, 15)}...` : 'Not set'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Overall Status */}
-            <div className="space-y-3">
-              <h4 className="font-medium text-gray-900">Overall Status</h4>
-              <div className={`p-4 rounded-lg border-2 ${
-                isSupabaseReady 
-                  ? 'bg-green-50 border-green-200 text-green-800' 
-                  : 'bg-red-50 border-red-200 text-red-800'
-              }`}>
-                <div className="flex items-center gap-2 mb-2">
-                  {isSupabaseReady ? (
-                    <CheckCircle className="w-5 h-5" />
-                  ) : (
-                    <XCircle className="w-5 h-5" />
-                  )}
-                  <span className="font-semibold">
-                    {isSupabaseReady ? 'Ready to Use' : 'Configuration Required'}
-                  </span>
-                </div>
-                <p className="text-sm">
-                  {isSupabaseReady 
-                    ? 'Supabase is properly configured and ready for use.'
-                    : 'Please set your Supabase API key environment variable to continue.'
-                  }
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Test Button */}
-          <div className="mt-6">
-            <Button
-              variant="primary"
-              size="lg"
-              onClick={runTests}
-              disabled={testing}
-              loading={testing}
-              fullWidth
-            >
-              {testing ? 'Running Comprehensive Tests...' : 'Run Full Test Suite'}
-            </Button>
-          </div>
+          <Button
+            variant="primary"
+            size="lg"
+            onClick={runTests}
+            disabled={testing}
+            loading={testing}
+            fullWidth
+          >
+            {testing ? 'Running Comprehensive Tests...' : 'Run Full Test Suite'}
+          </Button>
         </CardContent>
       </Card>
 

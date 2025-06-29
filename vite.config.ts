@@ -7,4 +7,27 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ['lucide-react'],
   },
+  server: {
+    port: 5173,
+    host: true,
+    hmr: {
+      overlay: true
+    }
+  },
+  build: {
+    sourcemap: true,
+    rollupOptions: {
+      onwarn(warning, warn) {
+        // Suppress certain warnings that are not critical
+        if (warning.code === 'MODULE_LEVEL_DIRECTIVE') {
+          return;
+        }
+        warn(warning);
+      }
+    }
+  },
+  define: {
+    // Ensure environment variables are properly defined
+    'process.env': {}
+  }
 });
